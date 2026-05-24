@@ -13,7 +13,7 @@ const port = process.env.PORT || 8000;
 app.use(cors({
   origin: function (origin, callback) {
     const allowed = [
-      'http://localhost:3000',
+      'https://assin09-3.vercel.app',
       'http://localhost:3001',
     ];
     if (!origin) return callback(null, true);
