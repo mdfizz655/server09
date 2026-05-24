@@ -18,7 +18,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 // ─── MONGODB CONNECTION ───────────────────────────────────────────────────────
-const uri = `mongodb+srv://infomdfizz655_db_user:mustaFIZ360$@cluster0.bwmefix.mongodb.net/?appName=Cluster0`;
+const uri = `mongodb+srv://infomdfizz655_db_user:aUclIK10jTy1JH4T@cluster0.hzy45ka.mongodb.net/?appName=Cluster0`;
 const client = new MongoClient(uri, {
   serverApi: { version: ServerApiVersion.v1, strict: true, deprecationErrors: true },
 });
