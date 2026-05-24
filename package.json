@@ -1,7 +1,6 @@
 {
   "name": "drive-fleet-server",
   "version": "1.0.0",
-  "description": "DriveFleet Car Rental Backend API",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
