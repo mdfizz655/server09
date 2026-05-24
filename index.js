@@ -16,6 +16,7 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
+// পাসওয়ার্ডে $ থাকলে অবশ্যই %24 দিবেন
 const uri = `mongodb+srv://infomdfizz655_db_user:aUclIK10jTy1JH4T@cluster0.hzy45ka.mongodb.net/?appName=Cluster0`;
 const client = new MongoClient(uri, {
   serverApi: { version: ServerApiVersion.v1, strict: true, deprecationErrors: true }
@@ -23,7 +24,8 @@ const client = new MongoClient(uri, {
 
 let carCollection, bookingCollection, userCollection;
 
-async function run() {
+// ডাটাবেস কানেকশন
+async function connectDB() {
   try {
     await client.connect();
     const db = client.db('driveFleetDB');
@@ -31,64 +33,54 @@ async function run() {
     bookingCollection = db.collection('bookings');
     userCollection = db.collection('users');
     console.log("✅ MongoDB Connected!");
-
-    // --- JWT Token & Cookie ---
-    app.post('/jwt', (req, res) => {
-      const user = req.body;
-      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '10h' });
-      res.cookie('token', token, {
-        httpOnly: true, secure: true, sameSite: 'none', maxAge: 10 * 60 * 60 * 1000
-      }).send({ success: true });
-    });
-
-    app.post('/logout', (req, res) => {
-      res.clearCookie('token', { httpOnly: true, secure: true, sameSite: 'none' }).send({ success: true });
-    });
-
-    // --- Auth: Register ---
-    app.post('/auth/register', async (req, res) => {
-      const { name, email, photo, password } = req.body;
-      const hashed = await bcrypt.hash(password, 12);
-      await userCollection.insertOne({ name, email, photo, password: hashed, createdAt: new Date() });
-      res.status(201).send({ message: 'User Registered' });
-    });
-
-    // --- Cars: Search & Filter (Challenge Requirement) ---
-    app.get('/cars', async (req, res) => {
-      const { search, filter } = req.query;
-      let query = {};
-      if (search) query.name = { $regex: search, $options: 'i' }; // Regex Search
-      if (filter && filter !== 'All') query.type = filter; // Type Filter
-      const result = await carCollection.find(query).toArray();
-      res.send(result);
-    });
-
-    // --- Booking: $inc Requirement (Challenge Requirement) ---
-    app.post('/bookings', async (req, res) => {
-      const booking = req.body;
-      const result = await bookingCollection.insertOne(booking);
-      // Increase booking_count using $inc
-      await carCollection.updateOne(
-        { _id: new ObjectId(booking.carId) },
-        { $inc: { booking_count: 1 } }
-      );
-      res.send(result);
-    });
-
-    // --- My Bookings ---
-    app.get('/my-bookings/:email', async (req, res) => {
-      const result = await bookingCollection.find({ userEmail: req.params.email }).toArray();
-      res.send(result);
-    });
-
-    // --- Delete Car (Confirmation handled in Frontend) ---
-    app.delete('/cars/:id', async (req, res) => {
-      const result = await carCollection.deleteOne({ _id: new ObjectId(req.params.id) });
-      res.send(result);
-    });
-
-  } finally {}
+  } catch (err) {
+    console.error("❌ DB Connection Error:", err);
+  }
 }
-run().catch(console.dir);
-app.get('/', (req, res) => res.send('🚗 DriveFleet API Live'));
-app.listen(port);
+connectDB();
+
+// Middleware: Verify Token
+const verifyToken = (req, res, next) => {
+  const token = req.cookies?.token || req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).send({ message: 'Unauthorized' });
+  
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET || 'secret', (err, decoded) => {
+    if (err) return res.status(403).send({ message: 'Forbidden' });
+    req.user = decoded;
+    next();
+  });
+};
+
+// ─── ROUTES (এগুলো এখন গ্লোবাল, তাই ৪MD হবে না) ──────────────────────────
+
+// ১. Add Car (Private)
+app.post('/cars', verifyToken, async (req, res) => {
+  try {
+    if (!carCollection) return res.status(503).send({ message: 'DB not ready' });
+    const result = await carCollection.insertOne({ ...req.body, createdAt: new Date() });
+    res.status(201).send(result);
+  } catch (err) {
+    res.status(500).send({ message: 'Failed to add car' });
+  }
+});
+
+// ২. Auth Routes
+app.post('/auth/register', async (req, res) => {
+  try {
+    const { name, email, photo, password } = req.body;
+    const hashed = await bcrypt.hash(password, 12);
+    await userCollection.insertOne({ name, email, photo, password: hashed, createdAt: new Date() });
+    res.status(201).send({ message: 'Registered' });
+  } catch (err) { res.status(500).send(err); }
+});
+
+// ৩. Get Cars (Public)
+app.get('/cars', async (req, res) => {
+  try {
+    const result = await carCollection.find().toArray();
+    res.send(result);
+  } catch (err) { res.status(500).send(err); }
+});
+
+app.get('/', (req, res) => res.send('🚗 API Live'));
+app.listen(port, () => console.log(`🚀 Server on ${port}`));
